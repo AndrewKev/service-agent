@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "Q2sa6IbuAxOuf8ODiDGi34RgVL788AZMXkvSJmow2MM=",
+  "Source": "service-agent",
+  "BasePath": "_content/service-agent",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}
