@@ -1,35 +1,29 @@
 using Microsoft.AspNetCore.Mvc;
-using System.Diagnostics;
-
-
 using service_agent.Filters;
+
 namespace service_agent.Controllers;
 
-  [ApiController]
-  [Route("[controller]/service")]
-  [TypeFilter(typeof(ApiKeyAuthFilter))]
+[ApiController]
+[Route("[controller]/service")]
+[TypeFilter(typeof(ApiKeyAuthFilter))]
 public class AgentController : ControllerBase
 {
+  private readonly ILogger<AgentController> _logger;
+
+  public AgentController(ILogger<AgentController> logger)
+  {
+    _logger = logger;
+  }
   // [HttpGet("/agent")]
   public string Get()
   {
     return "Hello from the Agent Controller!";
   }
 
-  // public IActionResult GetServiceInfo()
-  // {
-  //   var agentInfo = new
-  //   {
-  //     Name = "Service Agent",
-  //     Version = "1.0.0",
-  //     Description = "A simple service agent for managing system services."
-  //   };
-  //   return Ok(agentInfo);
-  // }
-
   [HttpPost("restart/{serviceName}")]
   public IActionResult RestartService(string serviceName)
   {
+    _logger.LogInformation("[RestartService] Request to restart service: {ServiceName}", serviceName);
     var process = new System.Diagnostics.Process
     {
       StartInfo = new System.Diagnostics.ProcessStartInfo
@@ -49,10 +43,12 @@ public class AgentController : ControllerBase
 
     if (process.ExitCode == 0)
     {
+      _logger.LogInformation("[RestartService] Successfully restarted: {ServiceName}", serviceName);
       return Ok(new { success = true, message = $"Service '{serviceName}' restarted successfully." });
     }
     else
     {
+      _logger.LogWarning("[RestartService] Failed to restart: {ServiceName}. Error: {Error}", serviceName, error);
       return BadRequest(new { success = false, message = $"Failed to restart service '{serviceName}'", error = error });
     }
   }
@@ -60,6 +56,7 @@ public class AgentController : ControllerBase
   [HttpPost("stop/{serviceName}")]
   public async Task<IActionResult> StopService(string serviceName)
   {
+    _logger.LogInformation("[StopService] Request to stop service: {ServiceName}", serviceName);
     var process = new System.Diagnostics.Process
     {
       StartInfo = new System.Diagnostics.ProcessStartInfo
@@ -81,6 +78,7 @@ public class AgentController : ControllerBase
     if (!finished)
     {
       process.Kill();
+      _logger.LogWarning("[StopService] Timeout stopping service: {ServiceName}", serviceName);
       return StatusCode(500, new { success = false, message = "Timeout: systemctl stop memakan waktu terlalu lama." });
     }
 
@@ -88,10 +86,12 @@ public class AgentController : ControllerBase
 
     if (process.ExitCode == 0)
     {
+      _logger.LogInformation("[StopService] Successfully stopped: {ServiceName}", serviceName);
       return Ok(new { success = true, message = $"Service '{serviceName}' stopped successfully." });
     }
     else
     {
+      _logger.LogWarning("[StopService] Failed to stop: {ServiceName}. Error: {Error}", serviceName, error);
       return BadRequest(new { success = false, message = $"Failed to stop service", error = error });
     }
   }
@@ -99,6 +99,7 @@ public class AgentController : ControllerBase
   [HttpGet("status/{serviceName}")]
   public IActionResult StatusService(string serviceName)
   {
+    _logger.LogInformation("[StatusService] Request to check status: {ServiceName}", serviceName);
     string command = $"/usr/bin/systemctl status {serviceName}";
     var process = new System.Diagnostics.Process
     {
@@ -117,6 +118,15 @@ public class AgentController : ControllerBase
     string error = process.StandardError.ReadToEnd();
     process.WaitForExit();
 
+    if (process.ExitCode == 0)
+    {
+      _logger.LogInformation("[StatusService] Status check success: {ServiceName}", serviceName);
+    }
+    else
+    {
+      _logger.LogWarning("[StatusService] Status check failed: {ServiceName}. Error: {Error}", serviceName, error);
+    }
+
     return Ok(new
     {
       success = process.ExitCode == 0,
@@ -129,6 +139,7 @@ public class AgentController : ControllerBase
   [HttpGet("systemd/{serviceName}")]
   public IActionResult GetSystemdConfig(string serviceName)
   {
+    _logger.LogInformation("[GetSystemdConfig] Request to get config: {ServiceName}", serviceName);
     var process = new System.Diagnostics.Process
     {
       StartInfo = new System.Diagnostics.ProcessStartInfo
@@ -149,10 +160,12 @@ public class AgentController : ControllerBase
 
     if (process.ExitCode == 0)
     {
+      _logger.LogInformation("[GetSystemdConfig] Successfully retrieved config: {ServiceName}", serviceName);
       return Ok(new { success = true, config = output });
     }
     else
     {
+      _logger.LogWarning("[GetSystemdConfig] Failed to retrieve config: {ServiceName}. Error: {Error}", serviceName, error);
       return BadRequest(new { success = false, message = "Failed to retrieve systemd configuration", error = error });
     }
   }
@@ -160,6 +173,7 @@ public class AgentController : ControllerBase
   [HttpPut("systemd/{serviceName}")]
   public IActionResult EditSystemdConfig(string serviceName, [FromBody] EditSystemdConfigRequest request)
   {
+    _logger.LogInformation("[EditSystemdConfig] Request to edit config: {ServiceName}", serviceName);
     // Step 1: Write config to file using sudo tee
     var writeProcess = new System.Diagnostics.Process
     {
@@ -181,8 +195,11 @@ public class AgentController : ControllerBase
     writeProcess.WaitForExit();
     if (writeProcess.ExitCode != 0)
     {
+      _logger.LogWarning("[EditSystemdConfig] Failed to write config: {ServiceName}. Error: {Error}", serviceName, writeError);
       return BadRequest(new { success = false, step = "write_config", error = writeError });
     }
+
+    _logger.LogInformation("[EditSystemdConfig] Successfully wrote config: {ServiceName}", serviceName);
 
     // Step 2: daemon-reload
     var reloadProcess = new System.Diagnostics.Process
@@ -202,8 +219,11 @@ public class AgentController : ControllerBase
     reloadProcess.WaitForExit();
     if (reloadProcess.ExitCode != 0)
     {
+      _logger.LogWarning("[EditSystemdConfig] Failed daemon-reload: {ServiceName}. Error: {Error}", serviceName, reloadError);
       return BadRequest(new { success = false, step = "daemon_reload", error = reloadError });
     }
+
+    _logger.LogInformation("[EditSystemdConfig] Successfully daemon-reload: {ServiceName}", serviceName);
 
     // Step 3: restart service
     var restartProcess = new System.Diagnostics.Process
@@ -223,9 +243,11 @@ public class AgentController : ControllerBase
     restartProcess.WaitForExit();
     if (restartProcess.ExitCode != 0)
     {
+      _logger.LogWarning("[EditSystemdConfig] Failed to restart: {ServiceName}. Error: {Error}", serviceName, restartError);
       return BadRequest(new { success = false, step = "restart", error = restartError });
     }
 
+    _logger.LogInformation("[EditSystemdConfig] Successfully updated and restarted: {ServiceName}", serviceName);
     return Ok(new { success = true, message = $"Config updated and service '{serviceName}' restarted successfully." });
   }
 }
