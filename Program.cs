@@ -7,6 +7,9 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Register ApiKeyService as singleton
+builder.Services.AddSingleton<service_agent.Services.ApiKeyService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -19,5 +22,9 @@ if (app.Environment.IsDevelopment())
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Print the generated API key to the console
+var apiKeyService = app.Services.GetRequiredService<service_agent.Services.ApiKeyService>();
+Console.WriteLine($"[API KEY] {apiKeyService.ApiKey}");
 
 app.Run();

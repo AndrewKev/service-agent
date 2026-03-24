@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Diagnostics;
 
+
+using service_agent.Filters;
 namespace service_agent.Controllers;
 
-[ApiController]
-[Route("[controller]/service")]
+  [ApiController]
+  [Route("[controller]/service")]
+  [TypeFilter(typeof(ApiKeyAuthFilter))]
 public class AgentController : ControllerBase
 {
   // [HttpGet("/agent")]
