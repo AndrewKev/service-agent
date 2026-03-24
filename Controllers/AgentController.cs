@@ -79,7 +79,7 @@ public class AgentController : ControllerBase
     {
       process.Kill();
       _logger.LogWarning("[StopService] Timeout stopping service: {ServiceName}", serviceName);
-      return StatusCode(500, new { success = false, message = "Timeout: systemctl stop memakan waktu terlalu lama." });
+      return StatusCode(500, new { success = false, message = "Timeout: systemctl stop took too long to complete." });
     }
 
     string error = await errorTask;
