@@ -220,8 +220,3 @@ sudo journalctl -u service-agent --no-pager | grep "API KEY"
 
 ---
 
-## Catatan Penting
-
-- File yang dibuat hanya `README.md`, tidak perlu mengubah file kode apapun.
-- Port default adalah `5555` sesuai konfigurasi systemd, dan bisa diubah di environment variable `ASPNETCORE_URLS`.
-- Pastikan semua perintah instalasi sudah tertulis dengan benar dan berurutan.
