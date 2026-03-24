@@ -156,4 +156,78 @@ public class AgentController : ControllerBase
       return BadRequest(new { success = false, message = "Failed to retrieve systemd configuration", error = error });
     }
   }
+  
+  [HttpPut("systemd/{serviceName}")]
+  public IActionResult EditSystemdConfig(string serviceName, [FromBody] EditSystemdConfigRequest request)
+  {
+    // Step 1: Write config to file using sudo tee
+    var writeProcess = new System.Diagnostics.Process
+    {
+      StartInfo = new System.Diagnostics.ProcessStartInfo
+      {
+        FileName = "/usr/bin/sudo",
+        Arguments = $"/usr/bin/tee /etc/systemd/system/{serviceName}.service",
+        RedirectStandardInput = true,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true,
+      }
+    };
+    writeProcess.Start();
+    writeProcess.StandardInput.Write(request.Config);
+    writeProcess.StandardInput.Close();
+    string writeError = writeProcess.StandardError.ReadToEnd();
+    writeProcess.WaitForExit();
+    if (writeProcess.ExitCode != 0)
+    {
+      return BadRequest(new { success = false, step = "write_config", error = writeError });
+    }
+
+    // Step 2: daemon-reload
+    var reloadProcess = new System.Diagnostics.Process
+    {
+      StartInfo = new System.Diagnostics.ProcessStartInfo
+      {
+        FileName = "/usr/bin/sudo",
+        Arguments = "/usr/bin/systemctl daemon-reload",
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true,
+      }
+    };
+    reloadProcess.Start();
+    string reloadError = reloadProcess.StandardError.ReadToEnd();
+    reloadProcess.WaitForExit();
+    if (reloadProcess.ExitCode != 0)
+    {
+      return BadRequest(new { success = false, step = "daemon_reload", error = reloadError });
+    }
+
+    // Step 3: restart service
+    var restartProcess = new System.Diagnostics.Process
+    {
+      StartInfo = new System.Diagnostics.ProcessStartInfo
+      {
+        FileName = "/usr/bin/sudo",
+        Arguments = $"/usr/bin/systemctl restart {serviceName}",
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true,
+      }
+    };
+    restartProcess.Start();
+    string restartError = restartProcess.StandardError.ReadToEnd();
+    restartProcess.WaitForExit();
+    if (restartProcess.ExitCode != 0)
+    {
+      return BadRequest(new { success = false, step = "restart", error = restartError });
+    }
+
+    return Ok(new { success = true, message = $"Config updated and service '{serviceName}' restarted successfully." });
+  }
 }
+
+public record EditSystemdConfigRequest(string Config);
