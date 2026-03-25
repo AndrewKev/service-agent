@@ -71,6 +71,7 @@ Semua endpoint memerlukan header `X-Api-Key` dengan nilai API key yang muncul di
 
 ## API Endpoints
 
+
 ### Health Check
 
 | Method | Path     | Deskripsi                      |
@@ -85,19 +86,24 @@ Host: localhost:5555
 X-Api-Key: <API_KEY>
 ```
 
-#### Contoh Response Sukses
+#### Contoh Response Sukses (HTTP 200)
 
 ```
-{"status":"Healthy"}
+{"success":true,"message":"Connection success"}
 ```
 
-#### Contoh Response Gagal
+#### Contoh Response Gagal (HTTP 500)
 
 ```
-{"error":"Unauthorized"}
+{"success":false,"message":"Connection failed","error":"<pesan exception>"}
 ```
+
+#### Contoh Response Gagal Autentikasi (HTTP 401)
+
+Tidak ada body JSON. Response 401 dihasilkan oleh filter autentikasi, bukan controller.
 
 ---
+
 
 ### Agent — Service Management
 
@@ -119,14 +125,14 @@ Host: localhost:5555
 X-Api-Key: <API_KEY>
 ```
 
-**Response Sukses:**
+**Response Sukses (HTTP 200):**
 ```
-{"message":"Service nginx restarted successfully"}
+{"success":true,"message":"Service 'nginx' restarted successfully."}
 ```
 
-**Response Gagal:**
+**Response Gagal (HTTP 400):**
 ```
-{"error":"Service not found"}
+{"success":false,"message":"Failed to restart service 'nginx'","error":"<output error dari systemctl>"}
 ```
 
 ##### Stop Service
@@ -137,14 +143,19 @@ Host: localhost:5555
 X-Api-Key: <API_KEY>
 ```
 
-**Response Sukses:**
+**Response Sukses (HTTP 200):**
 ```
-{"message":"Service nginx stopped successfully"}
+{"success":true,"message":"Service 'nginx' stopped successfully."}
 ```
 
-**Response Gagal:**
+**Response Gagal (HTTP 400):**
 ```
-{"error":"Service not found"}
+{"success":false,"message":"Failed to stop service","error":"<output error dari systemctl>"}
+```
+
+**Response Timeout (HTTP 500):**
+```
+{"success":false,"message":"Timeout: systemctl stop took too long to complete."}
 ```
 
 ##### Status Service
@@ -155,14 +166,23 @@ Host: localhost:5555
 X-Api-Key: <API_KEY>
 ```
 
-**Response Sukses:**
+**Response (HTTP 200, baik sukses maupun gagal):**
 ```
-{"service":"nginx","status":"active"}
-```
+// Service ditemukan / running
+{
+   "success": true,
+   "output": "<raw output dari systemctl status>",
+   "error": "",
+   "exitCode": 0
+}
 
-**Response Gagal:**
-```
-{"error":"Service not found"}
+// Service tidak ditemukan / stopped
+{
+   "success": false,
+   "output": "<raw output dari systemctl status>",
+   "error": "<stderr jika ada>",
+   "exitCode": 3
+}
 ```
 
 ##### Get systemd Config
@@ -173,14 +193,14 @@ Host: localhost:5555
 X-Api-Key: <API_KEY>
 ```
 
-**Response Sukses:**
+**Response Sukses (HTTP 200):**
 ```
-{"service":"nginx","config":"[Unit]\n..."}
+{"success":true,"config":"<isi lengkap file .service>"}
 ```
 
-**Response Gagal:**
+**Response Gagal (HTTP 400):**
 ```
-{"error":"Service not found"}
+{"success":false,"message":"Failed to retrieve systemd configuration","error":"<output error>"}
 ```
 
 ##### Edit systemd Config
@@ -192,20 +212,27 @@ X-Api-Key: <API_KEY>
 Content-Type: application/json
 
 {
-  "config": "[Unit]\nDescription=nginx..."
+   "config": "[Unit]\nDescription=nginx..."
 }
 ```
 
 > **Catatan:** Field `config` di request body berisi isi lengkap file `.service` dalam bentuk string.
 
-**Response Sukses:**
+**Response Sukses (HTTP 200):**
 ```
-{"message":"Config updated and service reloaded"}
+{"success":true,"message":"Config updated and service 'nginx' restarted successfully."}
 ```
 
-**Response Gagal:**
+**Response Gagal (HTTP 400):**
 ```
-{"error":"Failed to update config"}
+// Gagal saat menulis file
+{"success":false,"step":"write_config","error":"<output error>"}
+
+// Gagal saat daemon-reload
+{"success":false,"step":"daemon_reload","error":"<output error>"}
+
+// Gagal saat restart service
+{"success":false,"step":"restart","error":"<output error>"}
 ```
 
 ---
