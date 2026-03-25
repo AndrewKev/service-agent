@@ -61,6 +61,26 @@
    sudo journalctl -u service-agent --no-pager | grep "API KEY"
    ```
 
+6. **Konfigurasi sudo untuk www-data**
+
+    Agar service-agent dapat menjalankan perintah systemctl dan tee tanpa password, tambahkan konfigurasi berikut pada file sudoers:
+
+    - Jalankan perintah berikut di terminal server untuk membuka file sudoers dengan editor yang aman:
+
+       ```bash
+       sudo visudo
+       ```
+
+    - Tambahkan baris berikut di bagian **paling bawah** file sudoers (setelah semua baris yang sudah ada):
+
+       ```
+       www-data ALL=(root) NOPASSWD: /usr/bin/tee *, /usr/bin/systemctl daemon-reload, /usr/bin/systemctl enable *, /usr/bin/systemctl restart *, /usr/bin/systemctl stop *
+       ```
+
+    - Simpan dan keluar dari editor (`Ctrl+X` jika menggunakan nano, atau `:wq` jika menggunakan vi/vim).
+
+    > Konfigurasi ini diperlukan agar proses `www-data` (user yang menjalankan service-agent) dapat mengeksekusi perintah `systemctl` dan `tee` dengan hak akses root tanpa memerlukan password, yang dibutuhkan oleh semua endpoint di `/agent/service/*`.
+
 ---
 
 ## Authentication
