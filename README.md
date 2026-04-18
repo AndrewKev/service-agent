@@ -63,7 +63,7 @@
 
 6. **Konfigurasi sudo untuk www-data**
 
-    Agar service-agent dapat menjalankan perintah systemctl dan tee tanpa password, tambahkan konfigurasi berikut pada file sudoers:
+    Agar service-agent dapat menjalankan perintah systemctl, tee, dan journalctl tanpa password, tambahkan konfigurasi berikut pada file sudoers:
 
     - Jalankan perintah berikut di terminal server untuk membuka file sudoers dengan editor yang aman:
 
@@ -74,12 +74,14 @@
     - Tambahkan baris berikut di bagian **paling bawah** file sudoers (setelah semua baris yang sudah ada):
 
        ```
-       www-data ALL=(root) NOPASSWD: /usr/bin/tee *, /usr/bin/systemctl daemon-reload, /usr/bin/systemctl enable *, /usr/bin/systemctl restart *, /usr/bin/systemctl stop *
+       www-data ALL=(root) NOPASSWD: /usr/bin/tee *, /usr/bin/systemctl daemon-reload, /usr/bin/systemctl enable *, /usr/bin/systemctl restart *, /usr/bin/systemctl stop *, /usr/bin/journalctl *
        ```
 
     - Simpan dan keluar dari editor (`Ctrl+X` jika menggunakan nano, atau `:wq` jika menggunakan vi/vim).
 
-    > Konfigurasi ini diperlukan agar proses `www-data` (user yang menjalankan service-agent) dapat mengeksekusi perintah `systemctl` dan `tee` dengan hak akses root tanpa memerlukan password, yang dibutuhkan oleh semua endpoint di `/agent/service/*`.
+    > Konfigurasi ini diperlukan agar proses `www-data` (user yang menjalankan service-agent) dapat mengeksekusi perintah `systemctl`, `tee`, dan `journalctl` dengan hak akses root tanpa memerlukan password, yang dibutuhkan oleh semua endpoint di `/agent/service/*`.
+    >
+    > Alternatif untuk endpoint log: berikan akses baca journal langsung ke user runtime (mis. masukkan ke group `systemd-journal`), sehingga endpoint log bisa jalan tanpa sudo.
 
 ---
 
@@ -132,6 +134,7 @@ Tidak ada body JSON. Response 401 dihasilkan oleh filter autentikasi, bukan cont
 | POST   | /agent/service/restart/{serviceName}         | Restart sebuah systemd service   |
 | POST   | /agent/service/stop/{serviceName}            | Stop sebuah systemd service      |
 | GET    | /agent/service/status/{serviceName}          | Cek status sebuah systemd service|
+| GET    | /agent/service/logs/{serviceName}            | Stream log service dari journalctl |
 | GET    | /agent/service/systemd/{serviceName}         | Ambil isi konfigurasi systemd    |
 | PUT    | /agent/service/systemd/{serviceName}         | Edit konfigurasi systemd, reload |
 
@@ -205,6 +208,49 @@ X-Api-Key: <API_KEY>
 }
 ```
 
+##### Stream Service Logs (Realtime)
+
+```
+GET /agent/service/logs/nginx?lines=200&follow=true HTTP/1.1
+Host: localhost:5555
+X-Api-Key: <API_KEY>
+```
+
+Query parameter:
+
+- `lines` (opsional, default `200`): jumlah baris log awal yang dikirim saat koneksi dibuka.
+- `follow` (opsional, default `true`): jika `true`, koneksi tetap terbuka untuk menerima log baru secara realtime.
+
+**Response Sukses (HTTP 200):**
+
+Response berupa `text/plain` stream (bukan JSON) dari output `journalctl -u <serviceName>`.
+
+Contoh potongan stream:
+
+```
+Apr 18 10:15:31 host nginx[123]: starting worker process
+Apr 18 10:15:32 host nginx[123]: worker process is running
+...
+```
+
+**Response Gagal sebelum stream dimulai:**
+
+- HTTP 400 untuk input tidak valid (mis. format `serviceName` salah atau `lines` di luar batas).
+- HTTP 403 jika permission membaca journal tidak cukup.
+- HTTP 404 jika unit/journal service tidak ditemukan.
+
+Response gagal berbentuk JSON:
+
+```
+{"success":false,"message":"Unable to access logs for service 'nginx'.","error":"<detail error>"}
+```
+
+Catatan:
+
+- Saat `follow=true`, endpoint sengaja menjaga koneksi tetap terbuka (long-lived HTTP connection).
+- Jika client memutus koneksi, proses pembacaan log di server akan dihentikan.
+- Untuk reverse proxy seperti Nginx, nonaktifkan buffering pada route ini agar stream tidak tertahan.
+
 ##### Get systemd Config
 
 ```
@@ -266,4 +312,3 @@ sudo journalctl -u service-agent --no-pager | grep "API KEY"
 ```
 
 ---
-
