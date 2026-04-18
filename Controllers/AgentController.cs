@@ -404,6 +404,7 @@ public class AgentController : ControllerBase
     startInfo.ArgumentList.Add("-u");
     startInfo.ArgumentList.Add(serviceName);
     startInfo.ArgumentList.Add("--no-pager");
+    startInfo.ArgumentList.Add("-q");
     startInfo.ArgumentList.Add("-n");
     startInfo.ArgumentList.Add(lines.ToString());
 
@@ -486,7 +487,10 @@ public class AgentController : ControllerBase
       || error.Contains("not allowed")
       || error.Contains("a password is required")
       || error.Contains("access denied")
-      || error.Contains("not in the sudoers");
+      || error.Contains("not in the sudoers")
+      || error.Contains("insufficient permissions")
+      || error.Contains("not seeing messages from other users and the system")
+      || error.Contains("no journal files were opened due to insufficient permissions");
   }
 
   private static bool ContainsSudoPasswordRequired(string errorMessage)
@@ -499,7 +503,13 @@ public class AgentController : ControllerBase
   {
     string error = errorMessage.ToLowerInvariant();
 
-    if (error.Contains("permission denied") || error.Contains("not allowed") || error.Contains("a password is required") || error.Contains("sudo"))
+    if (error.Contains("permission denied")
+      || error.Contains("not allowed")
+      || error.Contains("a password is required")
+      || error.Contains("sudo")
+      || error.Contains("insufficient permissions")
+      || error.Contains("not seeing messages from other users and the system")
+      || error.Contains("no journal files were opened due to insufficient permissions"))
     {
       return StatusCodes.Status403Forbidden;
     }
