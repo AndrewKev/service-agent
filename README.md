@@ -37,11 +37,22 @@
    SyslogIdentifier=service-agent
    User=www-data
    Environment=ASPNETCORE_ENVIRONMENT=Production
-   Environment=ASPNETCORE_URLS=http://0.0.0.0:5555
+   Environment=ASPNETCORE_URLS=http://0.0.0.0:3333
+
+   # Override ServiceMonitoring config
+   Environment=ServiceMonitoring__Enabled=true
+   Environment=ServiceMonitoring__PollingIntervalSeconds=30
+   Environment=ServiceMonitoring__CommandTimeoutSeconds=10
+   Environment=ServiceMonitoring__ManagementBaseUrl=http://127.0.0.1:5000
+   Environment=ServiceMonitoring__RegisteredServicesEndpoint=/api/agent/registered-services
+   Environment=ServiceMonitoring__AlertEndpoint=/api/alert
+   Environment=ServiceMonitoring__ServerId=server-01
 
    [Install]
    WantedBy=multi-user.target
    ```
+
+   **note**: di `appsettings.json` ServiceMonitoring.Enabled default-nya false; aktifkan setelah ManagementBaseUrl dan ServerId terisi benar.
 
 4. **Aktifkan dan Jalankan Service**
 
@@ -74,12 +85,12 @@
     - Tambahkan baris berikut di bagian **paling bawah** file sudoers (setelah semua baris yang sudah ada):
 
        ```
-       www-data ALL=(root) NOPASSWD: /usr/bin/tee *, /usr/bin/systemctl daemon-reload, /usr/bin/systemctl enable *, /usr/bin/systemctl restart *, /usr/bin/systemctl stop *, /usr/bin/journalctl *
+       www-data ALL=(root) NOPASSWD: /usr/bin/tee *, /usr/bin/systemctl daemon-reload, /usr/bin/systemctl enable *, /usr/bin/systemctl restart *, /usr/bin/systemctl stop *, /usr/bin/systemctl show *, /usr/bin/journalctl *
        ```
 
     - Simpan dan keluar dari editor (`Ctrl+X` jika menggunakan nano, atau `:wq` jika menggunakan vi/vim).
 
-    > Konfigurasi ini diperlukan agar proses `www-data` (user yang menjalankan service-agent) dapat mengeksekusi perintah `systemctl`, `tee`, dan `journalctl` dengan hak akses root tanpa memerlukan password, yang dibutuhkan oleh semua endpoint di `/agent/service/*`.
+    > Konfigurasi ini diperlukan agar proses `www-data` (user yang menjalankan service-agent) dapat mengeksekusi perintah `systemctl`, `tee`, dan `journalctl` dengan hak akses root tanpa memerlukan password, termasuk kebutuhan background polling untuk membaca state service via `systemctl show`.
     >
     > Alternatif untuk endpoint log: berikan akses baca journal langsung ke user runtime (mis. masukkan ke group `systemd-journal`), sehingga endpoint log bisa jalan tanpa sudo.
 
@@ -88,6 +99,58 @@
 ## Authentication
 
 Semua endpoint memerlukan header `X-Api-Key` dengan nilai API key yang muncul di console/log saat aplikasi pertama kali start. API key ini di-generate ulang setiap kali aplikasi di-restart.
+
+---
+
+## Service Monitoring (Polling Alert)
+
+`service-agent` sekarang mendukung background polling untuk memantau service systemd terdaftar dan mengirim alert ke `service-agent-management`.
+
+Behavior utama:
+
+- Polling berjalan setiap 30 detik (default, bisa diubah via konfigurasi).
+- Agent mengambil daftar service terdaftar dari endpoint management.
+- Agent hanya mengecek service yang terdaftar.
+- Jika state service tidak sehat, agent mengirim `POST /api/alert` ke management.
+- Telegram tetap dikirim oleh `service-agent-management`, bukan oleh `service-agent`.
+
+### Konfigurasi
+
+Tambahkan/atur section berikut di `appsettings.json`:
+
+```json
+"ServiceMonitoring": {
+  "Enabled": false,
+  "PollingIntervalSeconds": 30,
+  "CommandTimeoutSeconds": 10,
+  "ManagementBaseUrl": "http://127.0.0.1:5000",
+  "RegisteredServicesEndpoint": "/api/agent/registered-services",
+  "AlertEndpoint": "/api/alert",
+  "ServerId": "PUT-SERVER-GUID-HERE"
+}
+```
+
+Keterangan:
+
+- `Enabled`: mengaktifkan/menonaktifkan monitoring.
+- `PollingIntervalSeconds`: interval polling.
+- `CommandTimeoutSeconds`: timeout command `systemctl`.
+- `ManagementBaseUrl`: base URL `service-agent-management`.
+- `RegisteredServicesEndpoint`: endpoint daftar service terdaftar.
+- `AlertEndpoint`: endpoint alert di management.
+- `ServerId`: ID server (`servers.id`) di database management.
+
+### Kontrak Header ke Management
+
+Saat agent memanggil endpoint management (`registered-services` dan `alert`), agent mengirim:
+
+- `X-Api-Key`: API key runtime milik `service-agent`.
+- `X-Server-Id`: nilai `ServerId` dari konfigurasi.
+
+Catatan penting:
+
+- API key agent berubah setiap restart.
+- Pastikan `servers.api_key` di management selalu sinkron dengan API key terbaru agent agar validasi antar-service tetap berhasil.
 
 ---
 
