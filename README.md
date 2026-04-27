@@ -40,19 +40,19 @@
    Environment=ASPNETCORE_URLS=http://0.0.0.0:3333
 
    # Override ServiceMonitoring config
-   Environment=ServiceMonitoring__Enabled=true
+   Environment=ServiceMonitoring__Enabled=false
    Environment=ServiceMonitoring__PollingIntervalSeconds=30
    Environment=ServiceMonitoring__CommandTimeoutSeconds=10
-   Environment=ServiceMonitoring__ManagementBaseUrl=http://127.0.0.1:5000
+   Environment=ServiceMonitoring__ManagementBaseUrl=http://SERVICE_AGENT_MANAGEMENT_HOST:5037
    Environment=ServiceMonitoring__RegisteredServicesEndpoint=/api/agent/registered-services
    Environment=ServiceMonitoring__AlertEndpoint=/api/alert
-   Environment=ServiceMonitoring__ServerId=server-01
+   Environment=ServiceMonitoring__ServerId=PUT-SERVER-GUID-HERE
 
    [Install]
    WantedBy=multi-user.target
    ```
 
-   **note**: di `appsettings.json` ServiceMonitoring.Enabled default-nya false; aktifkan setelah ManagementBaseUrl dan ServerId terisi benar.
+   **note**: `ServiceMonitoring__Enabled` sengaja dibuat `false` dulu. Aktifkan monitoring alert setelah `service-agent-management` berjalan, agent sudah didaftarkan di management, dan management sudah berhasil melakukan koneksi ke agent.
 
 4. **Aktifkan dan Jalankan Service**
 
@@ -113,6 +113,79 @@ Behavior utama:
 - Agent hanya mengecek service yang terdaftar.
 - Jika state service tidak sehat, agent mengirim `POST /api/alert` ke management.
 - Telegram tetap dikirim oleh `service-agent-management`, bukan oleh `service-agent`.
+
+### Tahapan Mengaktifkan Alert
+
+Ikuti urutan ini agar fitur alert berjalan dengan benar:
+
+1. **Pastikan `service-agent-management` sudah berjalan**
+
+   Jalankan aplikasi `service-agent-management` terlebih dahulu dan pastikan endpoint management bisa diakses dari server tempat `service-agent` berjalan.
+
+   Jika management berjalan di mesin berbeda, jangan gunakan `127.0.0.1` pada konfigurasi agent. Gunakan IP atau domain yang bisa dijangkau oleh server agent, contoh:
+
+   ```ini
+   Environment=ServiceMonitoring__ManagementBaseUrl=http://192.168.1.10:5037
+   ```
+
+   Jika management masih berjalan di local/debug Windows dan agent berjalan di WSL, gunakan IP Windows host dari sisi WSL, bukan `127.0.0.1`.
+
+2. **Daftarkan agent di `service-agent-management`**
+
+   Start `service-agent`, lalu ambil API key agent dari log:
+
+   ```bash
+   sudo journalctl -u service-agent --no-pager | grep "API KEY"
+   ```
+
+   Daftarkan server/agent tersebut di `service-agent-management` dengan IP, port agent, dan API key yang benar. Satu management bisa mengelola beberapa agent di beberapa server, jadi pastikan data IP/port/API key disesuaikan untuk masing-masing server.
+
+3. **Pastikan management bisa connect ke agent**
+
+   Dari `service-agent-management`, lakukan health check atau koneksi ke agent yang sudah didaftarkan. Jangan aktifkan monitoring alert sebelum management berhasil connect ke agent.
+
+   Jika API key agent berubah karena agent restart, update kembali API key di data server management.
+
+4. **Isi `ServerId` agent sesuai data di management**
+
+   Ambil ID server dari record server yang sudah dibuat di `service-agent-management`, lalu pasang ke konfigurasi systemd `service-agent`:
+
+   ```ini
+   Environment=ServiceMonitoring__ServerId=PUT-SERVER-GUID-HERE
+   ```
+
+   Nilai ini dipakai agent saat meminta daftar service terdaftar dan saat mengirim alert.
+
+5. **Aktifkan `ServiceMonitoring` di systemd service-agent**
+
+   Setelah semua langkah di atas berhasil, ubah konfigurasi systemd dari:
+
+   ```ini
+   Environment=ServiceMonitoring__Enabled=false
+   ```
+
+   menjadi:
+
+   ```ini
+   Environment=ServiceMonitoring__Enabled=true
+   ```
+
+   Reload systemd dan restart agent:
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl restart service-agent
+   ```
+
+6. **Verifikasi log monitoring**
+
+   Cek log agent untuk memastikan polling berjalan:
+
+   ```bash
+   sudo journalctl -u service-agent -f
+   ```
+
+   Jika muncul error `Connection refused`, biasanya `ManagementBaseUrl` belum bisa dijangkau dari server agent, management belum berjalan di host/port tersebut, atau firewall masih menolak koneksi.
 
 ### Konfigurasi
 
