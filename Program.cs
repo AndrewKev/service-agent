@@ -6,9 +6,6 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
 
 // Register ApiKeyService as singleton
 builder.Services.AddSingleton<ApiKeyService>();
@@ -21,13 +18,6 @@ builder.Services.AddSingleton<IAlertClient, AlertClient>();
 builder.Services.AddHostedService<ServiceMonitoringWorker>();
 
 var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
 
 app.UseAuthorization();
 
