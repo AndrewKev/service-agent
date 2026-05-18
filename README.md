@@ -37,7 +37,7 @@
    SyslogIdentifier=service-agent
    User=www-data
    Environment=ASPNETCORE_ENVIRONMENT=Production
-   Environment=ASPNETCORE_URLS=http://0.0.0.0:3333
+   Environment=ASPNETCORE_URLS=http://0.0.0.0:9898
 
    # Override ServiceMonitoring config
    Environment=ServiceMonitoring__Enabled=false
